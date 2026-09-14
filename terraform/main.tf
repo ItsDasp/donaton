@@ -11,7 +11,7 @@ terraform {
 # Configure AWS Provider
 provider "aws" {
   region = var.aws_region
-  
+
   # AWS Academy credentials may use session tokens
   # These will be configured via environment variables in GitHub Actions
 }
@@ -95,19 +95,19 @@ resource "aws_instance" "donaton_server" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id     = data.aws_subnets.default.ids[0]
-  
+
   # Use the security group we created
   vpc_security_group_ids = [aws_security_group.donaton_sg.id]
-  
+
   # User data script to install Docker and deploy the application
   user_data = templatefile("${path.module}/user_data.sh", {
     repository_url = var.repository_url
     branch_name    = var.branch_name
   })
-  
+
   # Ensure instance has a public IP
   associate_public_ip_address = true
-  
+
   tags = {
     Name        = "${var.project_name}-${var.environment}-server"
     Environment = var.environment
