@@ -97,8 +97,18 @@ resource "aws_security_group" "donaton_sg" {
   }
 }
 
+# Check if EC2 instance already exists
+data "aws_instance" "existing_server" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-${var.environment}-server"]
+  }
+}
+
 # EC2 Instance
 resource "aws_instance" "donaton_server" {
+  count = data.aws_instance.existing_server.id == "" ? 1 : 0
+
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id     = data.aws_subnets.default.ids[0]
