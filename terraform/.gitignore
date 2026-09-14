@@ -1,0 +1,37 @@
+# Terraform State files
+*.tfstate
+*.tfstate.*
+*.tfbackup
+
+# Terraform variables with sensitive data
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# Terraform plan files
+*.plan
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Terraform override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform lock file
+.terraform.lock.hcl
+
+# Terraform plugin directory
+.terraform/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
