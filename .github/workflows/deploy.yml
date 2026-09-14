@@ -44,10 +44,6 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      - name: Terraform Format
-        working-directory: ./terraform
-        run: terraform fmt
-
       - name: Terraform Validate
         working-directory: ./terraform
         run: terraform validate
@@ -94,14 +90,25 @@ jobs:
       - name: Wait for Application to Start
         run: |
           echo "Waiting for application to start..."
-          sleep 120
+          for i in {1..10}; do
+            echo "Attempt $i/10..."
+            APPLICATION_URL="${{ steps.terraform_outputs.outputs.application_url }}"
+            if curl -f -s -o /dev/null --max-time 10 "$APPLICATION_URL"; then
+              echo "✓ Frontend is accessible"
+              break
+            else
+              echo "⚠ Frontend not yet accessible, waiting..."
+              sleep 30
+            fi
+          done
           
-          # Check if frontend is accessible
+          # Final check
           APPLICATION_URL="${{ steps.terraform_outputs.outputs.application_url }}"
-          if curl -f -s -o /dev/null "$APPLICATION_URL"; then
-            echo "Frontend is accessible"
+          if curl -f -s -o /dev/null --max-time 10 "$APPLICATION_URL"; then
+            echo "✓ Frontend is accessible"
           else
-            echo "Frontend may still be starting up"
+            echo "⚠ Frontend may still be starting up or there might be an issue"
+            echo "Please check the EC2 instance logs for more details"
           fi
 
       - name: Comment Deployment Info on PR
