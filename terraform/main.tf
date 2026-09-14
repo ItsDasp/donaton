@@ -97,25 +97,23 @@ resource "aws_security_group" "donaton_sg" {
   }
 }
 
-# Check if EC2 instance already exists
-data "aws_instance" "existing_server" {
+# Get all instances with matching tags (take first one found)
+data "aws_instances" "existing_servers" {
   filter {
     name   = "tag:Name"
     values = ["${var.project_name}-${var.environment}-server"]
   }
-  filter {
-    name   = "tag:Environment"
-    values = [var.environment]
-  }
-  filter {
-    name   = "tag:Project"
-    values = [var.project_name]
-  }
 }
 
-# EC2 Instance
+# Get details of the first instance found
+data "aws_instance" "existing_server" {
+  count = length(data.aws_instances.existing_servers.ids) > 0 ? 1 : 0
+  instance_id = element(data.aws_instances.existing_servers.ids, 0)
+}
+
+# EC2 Instance - only create if no existing instances found
 resource "aws_instance" "donaton_server" {
-  count = data.aws_instance.existing_server.id == "" ? 1 : 0
+  count = length(data.aws_instances.existing_servers.ids) == 0 ? 1 : 0
 
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
