@@ -2,7 +2,7 @@ name: Deploy to AWS
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/azure-auth]
   workflow_dispatch:
 
 env:
