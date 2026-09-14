@@ -88,11 +88,13 @@ if [ ! -f ".env" ]; then
         sudo -u $DEFAULT_USER bash -c 'cat > .env << EOF
 AZURE_TENANT_ID=common
 AZURE_CLIENT_ID=dummy-client-id
+VITE_API_BASE_URL=/api
 EOF'
     else
         bash -c 'cat > .env << EOF
 AZURE_TENANT_ID=common
 AZURE_CLIENT_ID=dummy-client-id
+VITE_API_BASE_URL=/api
 EOF'
     fi
     echo ".env file created"
