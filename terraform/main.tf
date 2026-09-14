@@ -45,8 +45,15 @@ data "aws_subnets" "default" {
   }
 }
 
+# Check if security group already exists
+data "aws_security_group" "existing_sg" {
+  name = "${var.project_name}-${var.environment}-sg"
+  vpc_id = data.aws_vpc.default.id
+}
+
 # Security Group for EC2 instance
 resource "aws_security_group" "donaton_sg" {
+  count       = data.aws_security_group.existing_sg.id == "" ? 1 : 0
   name        = "${var.project_name}-${var.environment}-sg"
   description = "Security group for Donaton application"
   vpc_id      = data.aws_vpc.default.id
@@ -96,8 +103,8 @@ resource "aws_instance" "donaton_server" {
   instance_type = var.instance_type
   subnet_id     = data.aws_subnets.default.ids[0]
 
-  # Use the security group we created
-  vpc_security_group_ids = [aws_security_group.donaton_sg.id]
+  # Use the security group (either created or existing)
+  vpc_security_group_ids = length(aws_security_group.donaton_sg) > 0 ? [aws_security_group.donaton_sg[0].id] : [data.aws_security_group.existing_sg.id]
 
   # User data script to install Docker and deploy the application
   user_data = templatefile("${path.module}/user_data.sh", {
