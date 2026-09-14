@@ -70,7 +70,7 @@ services:
 
     environment:
       <<: *spring-env
-      JWT_SECRET: mi_clave_secreta_muy_larga_para_hs256_segura_12345
+      JWT_SECRET: ${JWT_SECRET:-mi_clave_secreta_muy_larga_para_hs256_segura_12345}
     depends_on:
       postgres:
         condition: service_healthy
