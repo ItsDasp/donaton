@@ -1,16 +1,10 @@
-import {
-  getAccessToken,
-  getRefreshToken,
-  isAccessTokenExpired,
-  setAuthTokens,
-} from '../lib/authSession';
+import { useAuthStore } from '../store/authStore';
+import { msalInstance, loginRequest } from '../lib/msalConfig';
 
 type QueryValue = string | number | boolean | null | undefined;
 
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
-export const API_BASE_URL = rawBaseUrl?.trim().replace(/\/+$/, '') ?? '';
-
-let refreshPromise: Promise<string | null> | null = null;
+export const API_BASE_URL = rawBaseUrl?.trim().replace(/\/$/, '') ?? '';
 
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -27,64 +21,35 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
   return url.toString();
 }
 
-function attachAuthHeader(headers: Headers) {
-  const token = getAccessToken();
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-}
+async function getMsalAccessToken(): Promise<string | null> {
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) return null;
 
-function extractTokensFromPayload(payload: unknown): { access: string | null; refresh: string | null } {
-  if (!payload || typeof payload !== 'object') {
-    return { access: typeof payload === 'string' ? payload : null, refresh: null };
-  }
-
-  const obj = payload as Record<string, unknown>;
-  const nested = obj.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;
-  const source = nested ?? obj;
-
-  const access = [source.accessToken, source.token]
-    .find((v): v is string => typeof v === 'string' && v.length > 0) ?? null;
-  const refresh = typeof source.refreshToken === 'string' && source.refreshToken.length > 0
-    ? source.refreshToken
-    : null;
-
-  return { access, refresh };
-}
-
-async function refreshAccessToken(): Promise<string | null> {
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    const storedRefresh = getRefreshToken();
-    if (!storedRefresh) return null;
-
-    const refreshResp = await fetch(buildUrl('/auth/refresh'), {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken: storedRefresh }),
+    const response = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account: accounts[0],
     });
 
-    if (!refreshResp.ok) return null;
+    return response.accessToken;
+  } catch {
+    return null;
+  }
+}
 
-    const refreshPayload = await refreshResp.json();
-    const { access, refresh } = extractTokensFromPayload(refreshPayload);
-    if (!access) return null;
-
-    setAuthTokens(access, refresh ?? storedRefresh);
-
-    const { syncAuthTokensToStore } = await import('../store/authStore');
-    syncAuthTokensToStore(access, refresh ?? storedRefresh);
-
-    return access;
-  })().finally(() => {
-    refreshPromise = null;
-  });
-
-  return refreshPromise;
+async function attachAuthHeader(headers: Headers) {
+  const { user, token } = useAuthStore.getState();
+  // Prefer token from authStore, fall back to MSAL
+  const accessToken = token || await getMsalAccessToken();
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  if (user?.email && !headers.has('X-User-Email')) {
+    headers.set('X-User-Email', user.email);
+  }
+  if (user?.role && !headers.has('X-User-Role')) {
+    headers.set('X-User-Role', user.role.toUpperCase());
+  }
 }
 
 async function fetchWithAuth(
@@ -122,22 +87,7 @@ async function fetchWithAuth(
     return response;
   }
 
-  // Reintento si el token existía pero no se envió (carrera tras login)
-  if (!headers.has('Authorization')) {
-    const token = getAccessToken();
-    if (token) {
-      const retryHeaders = new Headers(headers);
-      retryHeaders.set('Authorization', `Bearer ${token}`);
-      response = await fetch(buildUrl(path, options.query), {
-        method: options.method ?? 'GET',
-        headers: retryHeaders,
-        body: bodyPayload,
-      });
-      if (response.status !== 401) return response;
-    }
-  }
-
-  const newAccess = await refreshAccessToken();
+  const newAccess = await getMsalAccessToken();
   if (!newAccess) return response;
 
   const retryHeaders = new Headers(headers);
@@ -204,21 +154,18 @@ export async function requestJson<T>(
       : defaultMsg;
 
     try {
-      if (response.status === 401 && !isAuthPath && getAccessToken()) {
-        const { logoutFromApi } = await import('../store/authStore');
-        logoutFromApi();
+      if (response.status === 401 && !isAuthPath) {
+        useAuthStore.getState().logout(false);
         window.dispatchEvent(new CustomEvent('donaton:force-login', {
           detail: { status: 401, message },
         }));
       }
 
       if (response.status === 403) {
-        const { logoutFromApi } = await import('../store/authStore');
-        logoutFromApi();
+        useAuthStore.getState().logout(false);
         window.dispatchEvent(new CustomEvent('donaton:force-login', { detail: { status: 403, message } }));
       }
     } catch {
-      // ignore
     }
 
     const err = new Error(message) as any;
@@ -232,7 +179,6 @@ export async function requestJson<T>(
 }
 
 export function validateStoredAccessToken(): boolean {
-  const token = getAccessToken();
-  if (!token) return false;
-  return !isAccessTokenExpired(token);
+  const { token } = useAuthStore.getState();
+  return !!token;
 }

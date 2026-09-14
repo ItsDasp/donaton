@@ -1,14 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, LoginCredentials, RegisterData, Permission, UserRole } from '../types';
-import { MOCK_USERS } from '../mock/users';
-import { requestJson } from '../services/api';
-import {
-  isAccessTokenExpired,
-  registerStoreTokenGetters,
-  setAuthTokens,
-  syncAuthTokensFromStorage,
-} from '../lib/authSession';
+import { msalInstance, loginRequest } from '../lib/msalConfig';
+import type { AccountInfo } from '@azure/msal-browser';
+import type { User, UserRole, Permission } from '../types';
 
 const ROLE_PERMISSIONS_MAP: Record<UserRole, Permission[]> = {
   admin: [
@@ -28,44 +22,25 @@ const ROLE_PERMISSIONS_MAP: Record<UserRole, Permission[]> = {
   voluntario: ['dashboard:view', 'donations:view', 'logistics:view'],
 };
 
-function decodeJwtPayload(token: string): any | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-
-    const payloadPart = parts[1];
-    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
-
-    const json = decodeURIComponent(
-      Array.from(atob(padded))
-        .map(c => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
-        .join(''),
-    );
-
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
+function roleFromAzureToken(roles: string[] | undefined): UserRole | null {
+  if (!roles || roles.length === 0) return 'donante';
+  if (roles.includes('Admin')) return 'admin';
+  if (roles.includes('ONG')) return 'coordinador';
+  if (roles.includes('User')) return 'donante';
+  return 'donante';
 }
 
-function roleFromAccessToken(token: string | null | undefined): UserRole | null {
-  if (!token) return null;
-  const payload = decodeJwtPayload(token);
-  const apiRole = payload && typeof payload === 'object' ? (payload.role as string | undefined) : undefined;
-  if (apiRole === 'ADMIN') return 'admin';
-  if (apiRole === 'ONG') return 'coordinador';
-  if (apiRole === 'USER') return 'donante';
-  return null;
-}
-
-function buildUserProfile(email: string, role: UserRole, name?: string, phone?: string): User {
+function buildUserProfile(account: AccountInfo, azureRoles: string[]): User {
+  const role = roleFromAzureToken(azureRoles) || 'donante';
+  const email = account.username || account.localAccountId || '';
+  const name = account.name || email.split('@')[0];
+  
   return {
-    id: email,
-    name: name ?? email.split('@')[0],
+    id: account.localAccountId || email,
+    name: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase(),
     email,
     role,
-    phone,
+    phone: '',
     createdAt: new Date().toISOString(),
     lastLogin: new Date().toISOString(),
     permissions: ROLE_PERMISSIONS_MAP[role],
@@ -75,33 +50,19 @@ function buildUserProfile(email: string, role: UserRole, name?: string, phone?: 
 interface AuthState {
   user: User | null;
   token: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (credentials: LoginCredentials) => Promise<void>;
-  register: (data: RegisterData) => Promise<boolean>;
-  refreshAccessToken: () => Promise<void>;
-  logout: () => void;
+  sessionRegistered: boolean;
+  login: () => Promise<void>;
+  loginTraditional: (email: string, password: string) => Promise<void>;
+  logout: (openPopup?: boolean) => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
+  checkAuth: () => Promise<void>;
   clearError: () => void;
   hasPermission: (permission: Permission) => boolean;
-}
-
-export function syncAuthTokensToStore(accessToken: string, refresh: string | null = null) {
-  useAuthStore.setState({ token: accessToken, refreshToken: refresh, isAuthenticated: true });
-  setAuthTokens(accessToken, refresh);
-}
-
-export function logoutFromApi() {
-  setAuthTokens(null, null);
-  useAuthStore.setState({
-    user: null,
-    token: null,
-    refreshToken: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
-  });
+  updatePassword: (password: string) => Promise<void>;
+  updateProfile: (name: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -109,63 +70,52 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
-      refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      sessionRegistered: false,
 
-      login: async (credentials) => {
+      login: async () => {
         set({ isLoading: true, error: null });
 
         try {
-          const raw = await requestJson<unknown>('/auth/login', {
-            method: 'POST',
-            body: credentials,
-          });
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length > 0) {
+            const response = await msalInstance.acquireTokenSilent({
+              ...loginRequest,
+              account: accounts[0],
+            });
 
-          const token = typeof raw === 'string'
-            ? raw
-            : (raw && typeof raw === 'object'
-              ? ((raw as any).accessToken ?? (raw as any).token ?? null)
-              : null);
+            const account = response.account;
+            const token = response.accessToken;
+            const idTokenClaims = response.idTokenClaims as any;
+            const azureRoles = idTokenClaims?.roles || [];
 
-          const refreshToken = raw && typeof raw === 'object'
-            ? ((raw as any).refreshToken ?? null)
-            : null;
+            if (!account) {
+              throw new Error('No se pudo obtener la cuenta de Azure AD');
+            }
 
-          const demoUser = MOCK_USERS.find(u => u.email === credentials.email);
-          const derivedRole = roleFromAccessToken(token) ?? demoUser?.role ?? 'donante';
-          const user = demoUser
-            ? { ...demoUser, role: derivedRole, permissions: ROLE_PERMISSIONS_MAP[derivedRole], lastLogin: new Date().toISOString() }
-            : buildUserProfile(credentials.email, derivedRole, credentials.email.split('@')[0]);
+            const user = buildUserProfile(account, azureRoles);
 
-          if (!token) {
-            throw new Error('El servidor no devolvió un token de acceso');
+            set({
+              user,
+              token,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
+            return;
           }
 
-          setAuthTokens(token, refreshToken);
-
-          set({
-            user,
-            token,
-            refreshToken,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
+          await msalInstance.loginRedirect({
+            ...loginRequest,
           });
         } catch (error) {
-          setAuthTokens(null, null);
-          const status = error && typeof error === 'object' ? (error as any).status : undefined;
-          const message = status === 500
-            ? 'Credenciales inválidas'
-            : error instanceof Error
-              ? error.message
-              : 'Credenciales inválidas';
-
+          console.error('Login error:', error);
+          const message = error instanceof Error ? error.message : 'Error al iniciar sesión con Azure AD';
           set({
             user: null,
             token: null,
-            refreshToken: null,
             isAuthenticated: false,
             isLoading: false,
             error: message,
@@ -173,86 +123,159 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (data) => {
+      loginTraditional: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
 
-        if (data.password !== data.confirmPassword) {
-          set({ isLoading: false, error: 'Las contraseñas no coinciden' });
-          return false;
-        }
-
         try {
-          await requestJson<{ id: number; email: string; name?: string; phone?: string; role: 'USER' | 'ADMIN' | 'ONG' }>('/auth/register', {
+          const response = await fetch('/api/v1/auth/login/traditional', {
             method: 'POST',
-            body: {
-              name: data.name,
-              email: data.email,
-              phone: data.phone,
-              password: data.password,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al iniciar sesión');
+          }
+
+          const data = await response.json();
+          
+          // Get user info from backend
+          const userResponse = await fetch('/api/v1/auth/profile', {
+            headers: {
+              'Authorization': `Bearer ${data.accessToken}`,
             },
           });
 
+          if (!userResponse.ok) {
+            throw new Error('Error al obtener información del usuario');
+          }
+
+          const userData = await userResponse.json();
+
           set({
-            user: null,
-            token: null,
-            refreshToken: null,
-            isAuthenticated: false,
+            user: {
+              id: userData.id,
+              name: userData.name,
+              email: userData.email,
+              role: userData.role.toLowerCase(),
+              phone: userData.phone || '',
+              createdAt: userData.createdAt,
+              lastLogin: new Date().toISOString(),
+              permissions: ROLE_PERMISSIONS_MAP[userData.role.toLowerCase() as UserRole] || [],
+            },
+            token: data.accessToken,
+            isAuthenticated: true,
             isLoading: false,
             error: null,
           });
-          return true;
         } catch (error) {
+          console.error('Traditional login error:', error);
+          const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
           set({
             user: null,
             token: null,
-            refreshToken: null,
             isAuthenticated: false,
             isLoading: false,
-            error: error instanceof Error ? error.message : 'No se pudo registrar la cuenta',
+            error: message,
           });
-          return false;
         }
       },
 
-      refreshAccessToken: async () => {
-        const { refreshToken, user, isAuthenticated } = get();
-        if (!isAuthenticated || !user) return;
-        if (!refreshToken) return;
+      checkAuth: async () => {
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length === 0) {
+          set({ isAuthenticated: false, user: null, token: null });
+          return;
+        }
 
         try {
-          const raw = await requestJson<unknown>('/auth/refresh', {
-            method: 'POST',
-            body: { refreshToken },
+          const response = await msalInstance.acquireTokenSilent({
+            ...loginRequest,
+            account: accounts[0],
           });
 
-          const newAccessToken = raw && typeof raw === 'object'
-            ? ((raw as any).accessToken ?? (raw as any).token ?? null)
-            : (typeof raw === 'string' ? raw : null);
+          const account = response.account;
+          const token = response.accessToken;
+          const idTokenClaims = response.idTokenClaims as any;
+          const azureRoles = idTokenClaims?.roles || [];
 
-          const newRefreshToken = raw && typeof raw === 'object'
-            ? ((raw as any).refreshToken ?? refreshToken)
-            : refreshToken;
-
-          if (newAccessToken) {
-            setAuthTokens(newAccessToken, newRefreshToken);
-            set({ token: newAccessToken, refreshToken: newRefreshToken, isAuthenticated: true });
+          if (!account) {
+            set({ isAuthenticated: false, user: null, token: null });
+            return;
           }
+
+          const user = buildUserProfile(account, azureRoles);
+
+          set({
+            user,
+            token,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+
+          // Register session in backend (only once) - disabled temporarily
+          // if (!get().sessionRegistered) {
+          //   try {
+          //     await requestJson('/auth/sessions/register', {
+          //       method: 'POST',
+          //       body: {
+          //         device: getDeviceInfo(),
+          //         browser: getBrowserInfo(),
+          //         location: 'Unknown',
+          //         ipAddress: 'Unknown'
+          //       }
+          //     });
+          //     set({ sessionRegistered: true });
+          //   } catch (sessionError) {
+          //     console.warn('Failed to register session:', sessionError);
+          //     // Don't fail auth if session registration fails
+          //     set({ sessionRegistered: true });
+          //   }
+          // }
         } catch {
-          setAuthTokens(null, null);
-          set({ user: null, token: null, refreshToken: null, isAuthenticated: false, isLoading: false });
+          set({ isAuthenticated: false, user: null, token: null, sessionRegistered: false });
         }
       },
 
-      logout: () => {
-        setAuthTokens(null, null);
+      logout: async (openPopup = true) => {
+        if (openPopup) {
+          try {
+            await msalInstance.logoutPopup();
+          } catch {
+          }
+        }
         set({
           user: null,
           token: null,
-          refreshToken: null,
           isAuthenticated: false,
           isLoading: false,
           error: null,
+          sessionRegistered: false,
         });
+      },
+
+      getAccessToken: async () => {
+        const { user } = get();
+        if (!user) return null;
+
+        try {
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length === 0) return null;
+
+          const response = await msalInstance.acquireTokenSilent({
+            ...loginRequest,
+            account: accounts[0],
+          });
+
+          set({ token: response.accessToken });
+          return response.accessToken;
+        } catch {
+          return get().token;
+        }
       },
 
       clearError: () => {
@@ -263,6 +286,81 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get();
         if (!user) return false;
         return user.permissions.includes(permission);
+      },
+
+      updatePassword: async (password: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const token = await get().getAccessToken();
+          if (!token) {
+            throw new Error('No autenticado');
+          }
+
+          const response = await fetch('/api/v1/auth/profile/password', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ password }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al actualizar contraseña');
+          }
+
+          set({ isLoading: false, error: null });
+        } catch (error) {
+          console.error('Update password error:', error);
+          const message = error instanceof Error ? error.message : 'Error al actualizar contraseña';
+          set({
+            isLoading: false,
+            error: message,
+          });
+          throw error;
+        }
+      },
+
+      updateProfile: async (name: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const token = await get().getAccessToken();
+          if (!token) {
+            throw new Error('No autenticado');
+          }
+
+          const response = await fetch('/api/v1/auth/profile', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ name }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al actualizar perfil');
+          }
+
+          // Actualizar el nombre del usuario en el estado local
+          set((state) => ({
+            user: state.user ? { ...state.user, name } : null,
+            isLoading: false,
+            error: null,
+          }));
+        } catch (error) {
+          console.error('Update profile error:', error);
+          const message = error instanceof Error ? error.message : 'Error al actualizar perfil';
+          set({
+            isLoading: false,
+            error: message,
+          });
+          throw error;
+        }
       }
     }),
     {
@@ -270,27 +368,8 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (!state?.token || isAccessTokenExpired(state.token)) {
-          setAuthTokens(null, null);
-          if (state) {
-            state.user = null;
-            state.token = null;
-            state.refreshToken = null;
-            state.isAuthenticated = false;
-          }
-          return;
-        }
-        syncAuthTokensFromStorage();
-      },
     }
   )
-);
-
-registerStoreTokenGetters(
-  () => useAuthStore.getState().token,
-  () => useAuthStore.getState().refreshToken,
 );

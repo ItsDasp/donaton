@@ -7,7 +7,7 @@ import type { ManagedUserRecord } from '../types';
 import { AlertCircle, Plus, Search, Save, Trash2, UserPlus } from 'lucide-react';
 
 export function UsersPage() {
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, user: currentUser } = useAuthStore();
   const queryClient = useQueryClient();
   const { data: users = [], isLoading } = useUsers();
   const [search, setSearch] = useState('');
@@ -139,6 +139,11 @@ export function UsersPage() {
             ) : (
               filteredUsers.map(user => {
                 const currentRole = roleEdits[user.id] ?? user.role;
+                // Solo el admin principal (ID 1) puede modificar roles de otros admins
+                const isMainAdmin = currentUser?.id === '1' || currentUser?.email === 'admin@donaton.test';
+                const isTargetAdmin = user.role === 'ADMIN';
+                const canModifyThisUser = isMainAdmin || !isTargetAdmin;
+                
                 return (
                   <tr key={user.id}>
                     <td>
@@ -151,7 +156,13 @@ export function UsersPage() {
                       <select
                         value={currentRole}
                         onChange={e => setRoleEdits(prev => ({ ...prev, [user.id]: e.target.value as ManagedUserRecord['role'] }))}
-                        className="px-3 py-2 rounded-sm border border-border bg-background text-sm"
+                        disabled={!canModifyThisUser}
+                        className={`px-3 py-2 rounded-sm border border-border text-sm ${
+                          !canModifyThisUser 
+                            ? 'bg-secondary/50 text-muted-foreground cursor-not-allowed' 
+                            : 'bg-background cursor-pointer'
+                        }`}
+                        title={!canModifyThisUser ? (isTargetAdmin ? 'No puedes cambiar el rol de otros administradores' : '') : ''}
                       >
                         <option value="USER">Usuario</option>
                         <option value="ONG">ONG</option>
@@ -162,12 +173,17 @@ export function UsersPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          disabled={updateRoleMutation.isPending}
+                          disabled={updateRoleMutation.isPending || !canModifyThisUser}
                           onClick={() => {
                             setError(null);
                             updateRoleMutation.mutate({ id: user.id, role: currentRole });
                           }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-sm border border-border bg-secondary text-xs hover:bg-secondary/80 disabled:opacity-50"
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-sm border border-border text-xs ${
+                            !canModifyThisUser
+                              ? 'bg-secondary/50 text-muted-foreground cursor-not-allowed'
+                              : 'bg-secondary text-foreground hover:bg-secondary/80'
+                          } disabled:opacity-50`}
+                          title={!canModifyThisUser ? (isTargetAdmin ? 'No puedes cambiar el rol de otros administradores' : '') : ''}
                         >
                           <Save className="w-3 h-3" />
                           Guardar

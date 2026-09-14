@@ -19,12 +19,20 @@ public class JwtAuthenticationFilter implements WebFilter {
                 .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
                 .map(authentication -> {
-                    String email = authentication.getToken().getClaimAsString("preferred_username");
+                    String email = authentication.getToken().getClaimAsString("email");
+                    if (email == null || email.isBlank()) {
+                        email = authentication.getToken().getClaimAsString("unique_name");
+                    }
+                    if (email == null || email.isBlank()) {
+                        email = authentication.getToken().getClaimAsString("preferred_username");
+                    }
+                    String finalEmail = email;
                     var roles = authentication.getToken().getClaimAsStringList("roles");
-                    
+                    String finalRoles = roles == null ? "" : String.join(",", roles);
+
                     return exchange.mutate().request(request -> request
-                            .header("X-User-Email", email == null ? "" : email)
-                            .header("X-User-Role", roles == null ? "" : String.join(",", roles)))
+                            .header("X-User-Email", finalEmail == null ? "" : finalEmail)
+                            .header("X-User-Role", finalRoles))
                             .build();
                 })
                 .flatMap(mutatedExchange -> chain.filter(mutatedExchange))

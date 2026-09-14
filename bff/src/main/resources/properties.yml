@@ -8,8 +8,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID:common}/v2.0
-          jwk-set-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID:common}/discovery/v2.0/keys
+          issuer-uri: https://sts.windows.net/${AZURE_TENANT_ID:common}/
+          jwk-set-uri: https://sts.windows.net/${AZURE_TENANT_ID:common}/discovery/keys
   profiles:
     active: local
   cloud:

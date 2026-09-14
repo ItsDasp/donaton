@@ -40,6 +40,24 @@ public class UserService {
         return toSummary(repository.save(user));
     }
 
+    public UserSummaryDTO registrarAzureUser(User user) {
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new RuntimeException("Credenciales inválidas");
+        }
+
+        user.setEmail(user.getEmail().trim().toLowerCase());
+        
+        // Si el usuario ya existe, devolver el existente
+        if (repository.findByEmail(user.getEmail()).isPresent()) {
+            return toSummary(repository.findByEmail(user.getEmail()).get());
+        }
+
+        if (user.getName() != null) user.setName(user.getName().trim());
+        if (user.getPhone() != null) user.setPhone(user.getPhone().trim());
+        user.setRole(com.donaton.auth.model.Role.USER);
+        return toSummary(repository.save(user));
+    }
+
     public List<UserSummaryDTO> listarUsuarios(String role) {
         requireAdmin(role);
         return repository.findAll().stream().map(this::toSummary).toList();
@@ -55,17 +73,25 @@ public class UserService {
         return toSummary(repository.save(user));
     }
 
-    public UserSummaryDTO cambiarRol(Long id, RoleUpdateRequestDTO request, String role) {
+    public UserSummaryDTO cambiarRol(Long id, RoleUpdateRequestDTO request, String role, String email) {
         requireAdmin(role);
         if (request == null || request.role() == null || request.role().isBlank()) {
             throw new RuntimeException("Rol inválido");
         }
 
-        User user = repository.findById(id)
+        User currentUser = repository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new RuntimeException("Usuario actual no encontrado"));
+        
+        User targetUser = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        user.setRole(com.donaton.auth.model.Role.valueOf(request.role().trim().toUpperCase()));
-        return toSummary(repository.save(user));
+        // Los admins no pueden cambiar el rol de otros admins (solo el admin principal ID 1 puede)
+        if (targetUser.getRole() == com.donaton.auth.model.Role.ADMIN && !currentUser.getId().equals(1L)) {
+            throw new RuntimeException("No puedes cambiar el rol de otros administradores");
+        }
+
+        targetUser.setRole(com.donaton.auth.model.Role.valueOf(request.role().trim().toUpperCase()));
+        return toSummary(repository.save(targetUser));
     }
 
     public void eliminarUsuario(Long id, String role) {
@@ -73,6 +99,29 @@ public class UserService {
         User user = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         repository.delete(user);
+    }
+
+    public UserSummaryDTO updateProfile(String email, String name) {
+        User user = repository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        if (name != null && !name.isBlank()) {
+            user.setName(name.trim());
+        }
+        
+        return toSummary(repository.save(user));
+    }
+
+    public UserSummaryDTO updatePassword(String email, String password) {
+        User user = repository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        if (password == null || password.isBlank()) {
+            throw new RuntimeException("La contraseña es requerida");
+        }
+        
+        user.setPassword(password.trim());
+        return toSummary(repository.save(user));
     }
 
     public TokenResponseDTO login(String email, String password) {
@@ -133,7 +182,7 @@ public class UserService {
     }
 
     private void requireAdmin(String role) {
-        if (role == null || !"ADMIN".equalsIgnoreCase(role.trim())) {
+        if (role == null || !role.toUpperCase().contains("ADMIN")) {
             throw new RuntimeException("Solo un administrador puede realizar esta acción");
         }
     }

@@ -4,10 +4,12 @@ import { useAuthStore } from '../store/authStore';
 import { 
   LayoutDashboard, HeartHandshake, ClipboardList, Truck, 
   LogOut, ChevronRight, Menu, X, ShieldAlert,
-  Users
+  Users, Settings
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { abbreviateName } from '../lib/utils';
+import { Blobatar } from '@blobatar/react';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, required: 'dashboard:view' },
@@ -15,6 +17,7 @@ const navItems = [
   { path: '/needs', label: 'Necesidades', icon: ClipboardList, required: 'needs:view' },
   { path: '/logistics', label: 'Logística', icon: Truck, required: 'logistics:view' },
   { path: '/users', label: 'Usuarios', icon: Users, required: 'users:manage' },
+  { path: '/settings', label: 'Ajustes', icon: Settings, required: null },
 ];
 
 interface MainLayoutProps {
@@ -28,7 +31,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [httpBanner, setHttpBanner] = useState<{ status: number; message: string } | null>(null);
 
-  const visibleNav = navItems.filter(item => hasPermission(item.required as any));
+  const visibleNav = navItems.filter(item => !item.required || hasPermission(item.required as any));
 
   useEffect(() => {
     function onHttpError(event: Event) {
@@ -45,7 +48,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       const detail = (event as CustomEvent).detail as { status?: number; message?: string } | undefined;
       if (detail?.status === 401 || detail?.status === 403) {
         setHttpBanner(null);
-        logout();
+        logout(false);
         navigate('/login', { replace: true });
       }
     }
@@ -89,13 +92,24 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+              {user?.email ? (
+                <Blobatar name={user.email} />
+              ) : (
+                <div className="w-full h-full bg-secondary flex items-center justify-center">
+                  <span className="text-sm font-semibold">
+                    {user?.name?.charAt(0).toUpperCase() || 'U'}
+                  </span>
+                </div>
+              )}
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name}</p>
+              <p className="text-sm font-medium text-sidebar-foreground truncate">{abbreviateName(user?.name || '')}</p>
               <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
             </div>
           </div>
           <button
-            onClick={logout}
+            onClick={() => logout()}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 w-full rounded hover:bg-secondary"
           >
             <LogOut className="w-4 h-4" />
@@ -164,18 +178,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               {location.pathname === '/needs' && 'Necesidades Activas'}
               {location.pathname === '/logistics' && 'Operaciones Logísticas'}
               {location.pathname === '/users' && 'Administración de Usuarios'}
+              {location.pathname === '/settings' && 'Ajustes'}
             </h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden xl:block">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
-              </div>
-            </div>
           </div>
         </header>
 

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@FeignClient(name = "auth-service")
+@FeignClient(name = "auth-service", configuration = FeignConfig.class)
 public interface AuthClient {
 
     @PostMapping("/auth/login")
@@ -38,4 +38,19 @@ public interface AuthClient {
 
     @DeleteMapping("/auth/users/{id}")
     void deleteUser(@PathVariable Long id);
+
+    @GetMapping("/auth/sessions")
+    List<com.bff.dto.response.SessionHistoryResponse> getUserSessions();
+
+    @PostMapping("/auth/sessions/register")
+    com.bff.dto.response.SessionHistoryResponse registerSession(@RequestBody com.bff.dto.request.SessionRegistrationRequest request);
+
+    @PutMapping("/auth/profile")
+    UserSummaryResponse updateProfile(@RequestBody com.bff.dto.request.ProfileUpdateRequest request);
+
+    @PutMapping("/auth/profile/password")
+    UserSummaryResponse updatePassword(@RequestBody com.bff.dto.request.PasswordUpdateRequest request);
+
+    @PostMapping("/auth/register/azure")
+    UserSummaryResponse registerAzureUser(@RequestBody com.bff.dto.request.AzureUserRequest request);
 }

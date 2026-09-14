@@ -2,6 +2,7 @@ package com.bff.controller;
 
 import com.bff.dto.request.AdminUserRequest;
 import com.bff.dto.request.AuthRequest;
+import com.bff.dto.request.ProfileUpdateRequest;
 import com.bff.dto.request.RefreshRequest;
 import com.bff.dto.request.RegisterRequest;
 import com.bff.dto.request.RoleUpdateRequest;
@@ -13,9 +14,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/auth")
 public class AuthController {
 
     private final AuthService authService;
@@ -27,6 +29,11 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody AuthRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/login/traditional")
+    public AuthResponse loginTraditional(@Valid @RequestBody AuthRequest request) {
+        return authService.loginTraditional(request);
     }
 
     @PostMapping("/register")
@@ -65,5 +72,20 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteUser(@PathVariable Long id) {
         authService.deleteUser(id);
+    }
+
+    @GetMapping("/sessions")
+    public List<com.bff.dto.response.SessionHistoryResponse> getUserSessions() {
+        return authService.getUserSessions();
+    }
+
+    @PutMapping("/profile")
+    public UserSummaryResponse updateProfile(@Valid @RequestBody ProfileUpdateRequest request) {
+        return authService.updateProfile(request.getName());
+    }
+
+    @PutMapping("/profile/password")
+    public UserSummaryResponse updatePassword(@Valid @RequestBody com.bff.dto.request.PasswordUpdateRequest request) {
+        return authService.updatePassword(request.getPassword());
     }
 }
