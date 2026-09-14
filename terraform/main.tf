@@ -103,6 +103,14 @@ data "aws_instance" "existing_server" {
     name   = "tag:Name"
     values = ["${var.project_name}-${var.environment}-server"]
   }
+  filter {
+    name   = "tag:Environment"
+    values = [var.environment]
+  }
+  filter {
+    name   = "tag:Project"
+    values = [var.project_name]
+  }
 }
 
 # EC2 Instance
