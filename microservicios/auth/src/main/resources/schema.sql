@@ -1,4 +1,3 @@
--- Create session_history table
 CREATE TABLE IF NOT EXISTS session_history (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
@@ -9,8 +8,9 @@ CREATE TABLE IF NOT EXISTS session_history (
     created_at TIMESTAMP NOT NULL,
     last_active TIMESTAMP NOT NULL,
     current BOOLEAN NOT NULL DEFAULT FALSE,
-    expires_at TIMESTAMP NOT NULL,
-    INDEX idx_email (email),
-    INDEX idx_current (current),
-    INDEX idx_expires_at (expires_at)
+    expires_at TIMESTAMP NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_email ON session_history (email);
+CREATE INDEX IF NOT EXISTS idx_current ON session_history (current);
+CREATE INDEX IF NOT EXISTS idx_expires_at ON session_history (expires_at);
