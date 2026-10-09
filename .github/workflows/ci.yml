@@ -69,6 +69,10 @@ jobs:
       - name: Build & Test BFF
         if: steps.check-bff.outputs.exists == 'true'
         working-directory: bff
+        env:
+          AZURE_AD_AUDIENCE: "dummy-audience-for-ci"
+          AZURE_TENANT_ID: "dummy-tenant-id-for-ci"
+          AZURE_CLIENT_ID: "dummy-client-id-for-ci"
         run: mvn -B clean verify
 
   frontend:
