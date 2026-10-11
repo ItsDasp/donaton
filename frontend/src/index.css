@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 0 0% 90%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 90%;
+    --border: 0 0% 13%;
+    --input: 0 0% 13%;
+    --ring: 0 0% 90%;
+    --radius: 0.25rem;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 0% 90%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 13%;
+    --sidebar-ring: 0 0% 90%;
+
+    --color-base: #111111;
+    --color-elevated: #171717;
+    --color-surface: #1f1f1f;
+    --color-border: #222222;
+    --color-primary: #e6e6e6;
+    --color-secondary: #737373;
+    --color-muted: #4a4a4a;
+    --color-accent-positive: #6e9e6e;
+    --color-accent-warning: #b59a5a;
+    --color-accent-negative: #9e5a5a;
+    --color-accent-neutral: #5a7a9e;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .kpi-card {
+    @apply bg-card border border-border rounded-sm p-5 transition-all duration-200;
+  }
+
+  .kpi-card:hover {
+    @apply bg-secondary/60;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-medium;
+  }
+
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table th {
+    @apply text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-4 border-b border-border;
+  }
+
+  .data-table td {
+    @apply py-3 px-4 border-b border-border text-foreground;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-secondary/40;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-sm text-sm text-muted-foreground transition-colors;
+  }
+
+  .sidebar-item:hover {
+    @apply bg-secondary text-foreground;
+  }
+
+  .sidebar-item.active {
+    @apply bg-secondary text-foreground;
+  }
+
+  .page-header {
+    @apply flex items-center justify-between py-6 px-6 border-b border-border;
+  }
+
+  .section-card {
+    @apply bg-card border border-border rounded-sm overflow-hidden;
+  }
+
+  .section-card-header {
+    @apply flex items-center justify-between px-5 py-4 border-b border-border;
+  }
+}

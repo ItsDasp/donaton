@@ -1,0 +1,52 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: bff
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://sts.windows.net/${AZURE_TENANT_ID:common}/
+          jwk-set-uri: https://sts.windows.net/${AZURE_TENANT_ID:common}/discovery/keys
+  profiles:
+    active: local
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 5000
+            read-timeout: 10000
+            logger-level: basic
+
+logging:
+  level:
+    com.bff: INFO
+    org.springframework.cloud.openfeign: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  cloud:
+    openfeign:
+      client:
+        config:
+          auth-service:
+            url: http://auth-service:8080
+          donation-service:
+            url: http://donation-service:8080
+          logistics-service:
+            url: http://logistics-service:8080
+          needs-service:
+            url: http://needs-service:8080
+
+server:
+  port: 8080
+
+azure:
+  ad:
+    audience: ${AZURE_CLIENT_ID}

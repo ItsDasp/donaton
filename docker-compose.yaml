@@ -1,0 +1,196 @@
+version: "3.9"
+
+x-spring-env: &spring-env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mydatabase
+  SPRING_DATASOURCE_USERNAME: myuser
+  SPRING_DATASOURCE_PASSWORD: secret
+
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_USERNAME: myuser
+  SPRING_RABBITMQ_PASSWORD: secret
+
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_MAIN_LAZY_INITIALIZATION: true
+
+  JAVA_TOOL_OPTIONS: >
+    -XX:+TieredCompilation
+    -XX:TieredStopAtLevel=1
+    -XX:+UseContainerSupport
+    -XX:MaxRAMPercentage=75
+  AZURE_TENANT_ID: ${AZURE_TENANT_ID:-common}
+  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-dummy-client-id}
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: mydatabase
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydatabase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      donaton_network:
+        aliases:
+          - postgres
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: myuser
+      RABBITMQ_DEFAULT_PASS: secret
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: ./microservicios/auth
+    container_name: auth-service
+
+    environment:
+      <<: *spring-env
+      JWT_SECRET: ${JWT_SECRET:-mi_clave_secreta_muy_larga_para_hs256_segura_12345}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  donation:
+    build:
+      context: ./microservicios/donation
+    container_name: donation-service
+
+    environment:
+      <<: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  logistics:
+    build:
+      context: ./microservicios/logistics
+    container_name: logistics-service
+
+    environment:
+      <<: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  needs:
+    build:
+      context: ./microservicios/needs
+    container_name: needs-service
+    ports:
+      - "8084:8080"
+    environment:
+      <<: *spring-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./microservicios/gateway
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-common}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-dummy-client-id}
+    depends_on:
+      auth:
+        condition: service_started
+      donation:
+        condition: service_started
+      logistics:
+        condition: service_started
+      needs:
+        condition: service_started
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  bff:
+    build:
+      context: ./bff
+    container_name: bff-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_APPLICATION_NAME: bff
+      SPRING_CONFIG_NAME: properties
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-common}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-dummy-client-id}
+    depends_on:
+      auth:
+        condition: service_started
+      donation:
+        condition: service_started
+      logistics:
+        condition: service_started
+      needs:
+        condition: service_started
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend-app
+    ports:
+      - "4173:80"
+    depends_on:
+      bff:
+        condition: service_started
+    networks:
+      - donaton_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  donaton_network:
+    driver: bridge

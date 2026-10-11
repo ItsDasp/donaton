@@ -1,0 +1,21 @@
+spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        default-requeue-rejected: false
+
+rabbitmq:
+  exchanges:
+    logistics: ${RABBITMQ_LOGISTICS_EXCHANGE:donaton.logistics.events}
+    dead-letter: ${RABBITMQ_DEAD_LETTER_EXCHANGE:donaton.logistics.dlx}
+  logistics-events:
+    name: ${RABBITMQ_LOGISTICS_QUEUE:donaton.logistics.queue}
+    routing-key: ${RABBITMQ_LOGISTICS_ROUTING_KEY:logistics.event}
+  logistics-events-dlq:
+    name: ${RABBITMQ_LOGISTICS_DLQ:donaton.logistics.queue.dlq}
+    routing-key: ${RABBITMQ_LOGISTICS_DLQ_ROUTING_KEY:logistics.event.dead}

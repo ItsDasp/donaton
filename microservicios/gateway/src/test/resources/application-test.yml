@@ -1,0 +1,6 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
+# Falta añadir las credenciales en el .env / variables de entorno de github

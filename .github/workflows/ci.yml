@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  microservicios:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [auth, donation, logistics, needs, gateway]
+
+    name: Microservicio - ${{ matrix.service }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar existencia del microservicio
+        id: check-service
+        run: |
+          if [ -f "microservicios/${{ matrix.service }}/pom.xml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Java
+        if: steps.check-service.outputs.exists == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Build & Test Microservicio ${{ matrix.service }}
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: microservicios/${{ matrix.service }}
+        run: mvn -B clean verify
+
+  bff:
+    runs-on: ubuntu-latest
+
+    name: BFF
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar existencia del BFF
+        id: check-bff
+        run: |
+          if [ -f "bff/pom.xml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Java
+        if: steps.check-bff.outputs.exists == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Build & Test BFF
+        if: steps.check-bff.outputs.exists == 'true'
+        working-directory: bff
+        env:
+          AZURE_AD_AUDIENCE: "dummy-audience-for-ci"
+          AZURE_TENANT_ID: "dummy-tenant-id-for-ci"
+          AZURE_CLIENT_ID: "dummy-client-id-for-ci"
+        run: mvn -B clean verify
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    name: Frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar existencia del Frontend
+        id: check-frontend
+        run: |
+          if [ -f "frontend/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Node.js
+        if: steps.check-frontend.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check-frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run tests
+        if: steps.check-frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm test
+
+      - name: Build frontend
+        if: steps.check-frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm run build

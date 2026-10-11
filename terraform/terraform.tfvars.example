@@ -1,0 +1,17 @@
+# AWS Configuration
+aws_region     = "us-east-1"
+
+# Project Configuration
+project_name   = "donaton"
+environment    = "dev"
+
+# EC2 Configuration
+instance_type  = "t3.medium"
+
+# Repository Configuration (Required)
+repository_url = "https://github.com/ItsDasp/donaton"
+branch_name    = "feat/azure-auth"
+
+# Terraform State Configuration
+terraform_state_bucket  = "donaton-bucket"
+terraform_lock_table    = "donaton-lock-table"
