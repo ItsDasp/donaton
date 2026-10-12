@@ -2,8 +2,8 @@ spring:
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:guest}
-    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    username: ${SPRING_RABBITMQ_USERNAME:myuser}
+    password: ${SPRING_RABBITMQ_PASSWORD:secret}
     listener:
       simple:
         acknowledge-mode: manual
@@ -19,3 +19,4 @@ rabbitmq:
   logistics-events-dlq:
     name: ${RABBITMQ_LOGISTICS_DLQ:donaton.logistics.queue.dlq}
     routing-key: ${RABBITMQ_LOGISTICS_DLQ_ROUTING_KEY:logistics.event.dead}
+

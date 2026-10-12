@@ -100,7 +100,8 @@ services:
     build:
       context: ./microservicios/logistics
     container_name: logistics-service
-
+    ports:
+      - "8081:8080"      
     environment:
       <<: *spring-env
     depends_on:
