@@ -56,11 +56,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         if (isAzureConfigured) {
-            // Temporarily use dev mode due to DNS resolution issues with sts.windows.net
-            // TODO: Fix DNS resolution and enable proper JWT validation
             http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/envios/**").hasAnyRole("ADMIN", "ONG", "USER")
                 .requestMatchers(org.springframework.http.HttpMethod.PUT, "/envios/**").authenticated()
+                .requestMatchers("/api/v1/logistics/admin/dlq/**").permitAll() // <-- PERMITIR DLQ ADMIN
                 .anyRequest().authenticated()
                 )
                 .addFilterBefore(devAuthFilter(), UsernamePasswordAuthenticationFilter.class);
@@ -68,6 +67,7 @@ public class SecurityConfig {
             http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/envios/**").hasAnyRole("ADMIN", "ONG", "USER")
                 .requestMatchers(org.springframework.http.HttpMethod.PUT, "/envios/**").authenticated()
+                .requestMatchers("/api/v1/logistics/admin/dlq/**").permitAll() // <-- PERMITIR DLQ ADMIN
                 .anyRequest().authenticated()
                 )
                 .addFilterBefore(devAuthFilter(), UsernamePasswordAuthenticationFilter.class);

@@ -1,12 +1,20 @@
 package com.donaton.logistics.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 
 @ConfigurationProperties(prefix = "rabbitmq")
+@Validated
 public class RabbitMQProperties {
 
+    @Valid
     private ExchangeProperties exchanges = new ExchangeProperties();
+    @Valid
     private QueueProperties logisticsEvents = new QueueProperties();
+    @Valid
     private QueueProperties logisticsEventsDlq = new QueueProperties();
 
     public ExchangeProperties getExchanges() {
@@ -34,7 +42,9 @@ public class RabbitMQProperties {
     }
 
     public static class ExchangeProperties {
+        @NotBlank
         private String logistics;
+        @NotBlank
         private String deadLetter;
 
         public String getLogistics() {
@@ -55,7 +65,9 @@ public class RabbitMQProperties {
     }
 
     public static class QueueProperties {
+        @NotBlank
         private String name;
+        @NotBlank
         private String routingKey;
 
         public String getName() {

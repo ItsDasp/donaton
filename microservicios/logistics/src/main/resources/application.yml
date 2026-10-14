@@ -9,6 +9,11 @@ spring:
         acknowledge-mode: manual
         default-requeue-rejected: false
 
+logging:
+  level:
+    org.springframework.amqp: INFO
+    org.springframework.integration: DEBUG
+
 rabbitmq:
   exchanges:
     logistics: ${RABBITMQ_LOGISTICS_EXCHANGE:donaton.logistics.events}
@@ -19,4 +24,3 @@ rabbitmq:
   logistics-events-dlq:
     name: ${RABBITMQ_LOGISTICS_DLQ:donaton.logistics.queue.dlq}
     routing-key: ${RABBITMQ_LOGISTICS_DLQ_ROUTING_KEY:logistics.event.dead}
-
