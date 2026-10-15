@@ -3,22 +3,27 @@ package com.donaton.auth.service;
 import com.donaton.auth.dto.RoleUpdateRequestDTO;
 import com.donaton.auth.dto.TokenResponseDTO;
 import com.donaton.auth.dto.UserSummaryDTO;
+import com.donaton.auth.messaging.RabbitEventPublisher;
 import com.donaton.auth.model.User;
 import com.donaton.auth.repository.UserRepositoryPattern;
 import com.donaton.auth.security.JwtService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
 
     private final UserRepositoryPattern repository;
     private final JwtService jwtService;
+    private final RabbitEventPublisher eventPublisher;
 
-    public UserService(UserRepositoryPattern repository, JwtService jwtService) {
+    public UserService(UserRepositoryPattern repository, JwtService jwtService,
+                       RabbitEventPublisher eventPublisher) {
         this.repository = repository;
         this.jwtService = jwtService;
+        this.eventPublisher = eventPublisher;
     }
 
     public UserSummaryDTO registrarPublic(User user) {
@@ -37,7 +42,9 @@ public class UserService {
         if (user.getName() != null) user.setName(user.getName().trim());
         if (user.getPhone() != null) user.setPhone(user.getPhone().trim());
         user.setRole(com.donaton.auth.model.Role.USER);
-        return toSummary(repository.save(user));
+        User saved = repository.save(user);
+        eventPublisher.publish("user.registered", userEventData(saved));
+        return toSummary(saved);
     }
 
     public UserSummaryDTO registrarAzureUser(User user) {
@@ -55,7 +62,9 @@ public class UserService {
         if (user.getName() != null) user.setName(user.getName().trim());
         if (user.getPhone() != null) user.setPhone(user.getPhone().trim());
         user.setRole(com.donaton.auth.model.Role.USER);
-        return toSummary(repository.save(user));
+        User saved = repository.save(user);
+        eventPublisher.publish("user.registered", userEventData(saved));
+        return toSummary(saved);
     }
 
     public List<UserSummaryDTO> listarUsuarios(String role) {
@@ -70,7 +79,9 @@ public class UserService {
         if (user.getName() != null) user.setName(user.getName().trim());
         if (user.getPhone() != null) user.setPhone(user.getPhone().trim());
         if (user.getRole() == null) user.setRole(com.donaton.auth.model.Role.USER);
-        return toSummary(repository.save(user));
+        User saved = repository.save(user);
+        eventPublisher.publish("user.registered", userEventData(saved));
+        return toSummary(saved);
     }
 
     public UserSummaryDTO cambiarRol(Long id, RoleUpdateRequestDTO request, String role, String email) {
@@ -91,7 +102,9 @@ public class UserService {
         }
 
         targetUser.setRole(com.donaton.auth.model.Role.valueOf(request.role().trim().toUpperCase()));
-        return toSummary(repository.save(targetUser));
+        User saved = repository.save(targetUser);
+        eventPublisher.publish("user.role_changed", userEventData(saved));
+        return toSummary(saved);
     }
 
     public void eliminarUsuario(Long id, String role) {
@@ -99,6 +112,7 @@ public class UserService {
         User user = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         repository.delete(user);
+        eventPublisher.publish("user.deleted", userEventData(user));
     }
 
     public UserSummaryDTO updateProfile(String email, String name) {
@@ -109,7 +123,9 @@ public class UserService {
             user.setName(name.trim());
         }
         
-        return toSummary(repository.save(user));
+        User saved = repository.save(user);
+        eventPublisher.publish("user.updated", userEventData(saved));
+        return toSummary(saved);
     }
 
     public UserSummaryDTO updatePassword(String email, String password) {
@@ -194,6 +210,15 @@ public class UserService {
                 user.getEmail(),
                 user.getPhone(),
                 user.getRole() == null ? null : user.getRole().name()
+        );
+    }
+
+    private Map<String, Object> userEventData(User user) {
+        return Map.of(
+                "userId", user.getId(),
+                "email", user.getEmail(),
+                "name", user.getName() == null ? "" : user.getName(),
+                "role", user.getRole() == null ? "" : user.getRole().name()
         );
     }
 }

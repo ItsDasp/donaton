@@ -5,11 +5,14 @@ import com.donaton.donation.client.NeedsClient;
 import com.donaton.donation.dto.NeedDTO;
 import com.donaton.donation.exception.BadRequestException;
 import com.donaton.donation.exception.ResourceNotFoundException;
+import com.donaton.donation.messaging.RabbitEventPublisher;
 import com.donaton.donation.model.DonationModel;
 import com.donaton.donation.repository.DonationRepositoryPattern;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 public class DonationService {
@@ -17,15 +20,18 @@ public class DonationService {
     private final DonationRepositoryPattern repository;
     private final NeedsClient needsClient;
     private final LogisticsClient logisticsClient;
+        private final RabbitEventPublisher eventPublisher;
 
     public DonationService(
             DonationRepositoryPattern repository,
             NeedsClient needsClient,
-            LogisticsClient logisticsClient
+                        LogisticsClient logisticsClient,
+                        RabbitEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.needsClient = needsClient;
         this.logisticsClient = logisticsClient;
+                this.eventPublisher = eventPublisher;
     }
 
         public DonationModel crear(DonationModel donation, String email, String role) {
@@ -88,6 +94,7 @@ public class DonationService {
                         }
                 }
 
+                eventPublisher.publish("donation.created", donationEventData(saved));
                 return saved;
         }
 
@@ -138,5 +145,16 @@ public class DonationService {
                 if (donation.getCantidad() > remaining) {
                         throw new BadRequestException("La cantidad supera lo requerido por la necesidad");
                 }
+        }
+
+        private Map<String, Object> donationEventData(DonationModel donation) {
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("donationId", donation.getId());
+                data.put("needId", donation.getNeedId());
+                data.put("cantidad", donation.getCantidad());
+                data.put("tipo", donation.getTipo());
+                data.put("direccion", donation.getDireccion());
+                data.put("donorEmail", donation.getDonorEmail());
+                return data;
         }
 }

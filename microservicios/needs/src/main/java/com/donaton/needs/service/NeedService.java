@@ -1,18 +1,23 @@
 package com.donaton.needs.service;
 
 import com.donaton.needs.model.NeedEntity;
+import com.donaton.needs.messaging.RabbitEventPublisher;
 import com.donaton.needs.repository.NeedRepositoryPattern;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 public class NeedService {
 
     private final NeedRepositoryPattern repository;
+    private final RabbitEventPublisher eventPublisher;
 
-    public NeedService(NeedRepositoryPattern repository) {
+    public NeedService(NeedRepositoryPattern repository, RabbitEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     public List<NeedEntity> list(String category, String status) {
@@ -42,7 +47,9 @@ public class NeedService {
         
         if (need.getQuantityReceived() == null) need.setQuantityReceived(0.0);
         if (need.getMatchedDonations() == null) need.setMatchedDonations(0);
-        return repository.save(need);
+        NeedEntity saved = repository.save(need);
+        eventPublisher.publish("need.created", needEventData(saved));
+        return saved;
     }
 
     public NeedEntity update(String id, NeedEntity update) {
@@ -67,7 +74,9 @@ public class NeedService {
         existing.setVerifiedBy(update.getVerifiedBy());
 
         
-        return repository.save(existing);
+        NeedEntity saved = repository.save(existing);
+        eventPublisher.publish("need.updated", needEventData(saved));
+        return saved;
     }
 
     public NeedEntity receive(String id, Double amount) {
@@ -84,7 +93,9 @@ public class NeedService {
             need.setStatus("satisfecha");
         }
 
-        return repository.save(need);
+        NeedEntity saved = repository.save(need);
+        eventPublisher.publish("need.received", needEventData(saved));
+        return saved;
     }
 
     public NeedEntity rollbackReceive(String id, Double amount) {
@@ -105,10 +116,26 @@ public class NeedService {
             need.setStatus("en_proceso");
         }
 
-        return repository.save(need);
+        NeedEntity saved = repository.save(need);
+        eventPublisher.publish("need.receive_rolled_back", needEventData(saved));
+        return saved;
     }
 
     public void delete(String id) {
+        NeedEntity existing = getById(id);
         repository.deleteById(id);
+        eventPublisher.publish("need.deleted", needEventData(existing));
+    }
+
+    private Map<String, Object> needEventData(NeedEntity need) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("needId", need.getId());
+        data.put("code", need.getCode());
+        data.put("category", need.getCategory());
+        data.put("quantityRequired", need.getQuantityRequired());
+        data.put("quantityReceived", need.getQuantityReceived());
+        data.put("status", need.getStatus());
+        data.put("centerId", need.getCenterId());
+        return data;
     }
 }

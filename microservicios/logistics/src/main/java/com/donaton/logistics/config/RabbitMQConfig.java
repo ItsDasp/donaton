@@ -2,8 +2,8 @@ package com.donaton.logistics.config;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -62,13 +62,13 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public TopicExchange logisticsExchange() {
-        return new TopicExchange(properties.getExchanges().getLogistics());
+    public DirectExchange logisticsExchange() {
+        return new DirectExchange(properties.getExchanges().getLogistics());
     }
 
     @Bean
-    public TopicExchange deadLetterExchange() {
-        return new TopicExchange(properties.getExchanges().getDeadLetter());
+    public DirectExchange deadLetterExchange() {
+        return new DirectExchange(properties.getExchanges().getDeadLetter());
     }
 
     @Bean
@@ -88,7 +88,7 @@ public class RabbitMQConfig {
     @Bean
     public Binding logisticsEventsDlqBinding(
             @Qualifier("logisticsEventsDlq") Queue logisticsEventsDlq,
-            @Qualifier("deadLetterExchange") TopicExchange deadLetterExchange) {
+            @Qualifier("deadLetterExchange") DirectExchange deadLetterExchange) {
         return BindingBuilder.bind(logisticsEventsDlq)
                 .to(deadLetterExchange)
                 .with(properties.getLogisticsEventsDlq().getRoutingKey());
@@ -97,7 +97,7 @@ public class RabbitMQConfig {
     @Bean
     public Binding logisticsEventsBinding(
             @Qualifier("logisticsEventsQueue") Queue logisticsEventsQueue,
-            @Qualifier("logisticsExchange") TopicExchange logisticsExchange) {
+            @Qualifier("logisticsExchange") DirectExchange logisticsExchange) {
         return BindingBuilder.bind(logisticsEventsQueue)
                 .to(logisticsExchange)
                 .with(properties.getLogisticsEvents().getRoutingKey());
