@@ -1,6 +1,6 @@
 frontend/.env
 .env
-
+.env.production
 
 # Terraform
 terraform/.terraform/
@@ -55,5 +55,3 @@ terraform/.terraform.lock.hcl
 *.so.original
 *.dylib.original
 *.class.original
-frontend/.env
-frontend/.env

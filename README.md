@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Java-21-orange" alt="Java">
+  <img src="https://img.shields.io/badge/Java-17-orange" alt="Java">
   <img src="https://img.shields.io/badge/Spring_Boot-3.x-green" alt="Spring Boot">
   <img src="https://img.shields.io/badge/React-19-61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6" alt="TypeScript">
@@ -33,7 +33,7 @@ La solución está compuesta por:
 
 ## Tecnologías
 
-* Java 21
+* Java 17
 * Spring Boot
 * Spring Cloud Gateway
 * OpenFeign
@@ -101,6 +101,9 @@ docker compose down
 │   ├── gateway/
 │   ├── logistics/
 │   └── needs/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 └── docker-compose.yml
 ```
 

@@ -4,21 +4,20 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 @Configuration
 public class SecurityConfig {
@@ -34,36 +33,34 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/login", "/register", "/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register", "/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/auth/profile").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/users").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/users").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/auth/users/**").permitAll()
+                        .requestMatchers(HttpMethod.DELETE, "/auth/users/**").permitAll()
                 .requestMatchers("/users/**").hasRole("ADMIN")
-                        .requestMatchers("/auth/users/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(loggingFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(gatewayAuthFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(afterFilter(), UsernamePasswordAuthenticationFilter.class)
-                .httpBasic(Customizer.withDefaults());
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
+                .addFilterBefore(gatewayAuthFilter(), org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }
 
-    private OncePerRequestFilter loggingFilter() {
-        return new OncePerRequestFilter() {
-            @Override
-            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-                    throws ServletException, IOException {
-                filterChain.doFilter(request, response);
-            }
-        };
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        return NimbusJwtDecoder.withJwkSetUri("https://login.microsoftonline.com/6109d4ab-3dff-41c5-a7d7-a2cdc4fa7abd/discovery/v2.0/keys")
+                .build();
     }
 
-    private OncePerRequestFilter afterFilter() {
-        return new OncePerRequestFilter() {
-            @Override
-            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-                    throws ServletException, IOException {
-                filterChain.doFilter(request, response);
-            }
-        };
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return jwtAuthenticationConverter;
     }
 
     @Bean
@@ -84,28 +81,21 @@ public class SecurityConfig {
                     return;
                 }
 
-                // If Bearer token is present (Azure AD), extract email from it
-                if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                    // For now, allow Azure AD tokens without validation
-                    // TODO: Implement proper Azure AD token validation
-                    if (email == null || email.isBlank()) {
-                        // If no X-User-Email header, try to get from token or use a default
-                        email = "azure-user@example.com";
-                    }
-                }
+                // Allow gateway auth without Bearer token if X-User-Email is present
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    if (email != null && !email.isBlank()) {
+                        // Gateway auth without Bearer token
+                        var authorities = role == null || role.isBlank()
+                                ? java.util.List.<org.springframework.security.core.authority.SimpleGrantedAuthority>of()
+                                : java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role.trim()));
 
-                if (email == null || email.isBlank()) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
+                        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(email, null, authorities)
+                        );
+                    }
+                    filterChain.doFilter(request, response);
                     return;
                 }
-
-                var authorities = role == null || role.isBlank()
-                        ? List.<SimpleGrantedAuthority>of()
-                        : List.of(new SimpleGrantedAuthority("ROLE_" + role.trim()));
-
-                SecurityContextHolder.getContext().setAuthentication(
-                        new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(email, null, authorities)
-                );
 
                 filterChain.doFilter(request, response);
             }
