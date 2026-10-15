@@ -8,24 +8,24 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID:common}/v2.0
-          jwk-set-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID:common}/discovery/v2.0/keys
+          issuer-uri: https://login.microsoftonline.com/6109d4ab-3dff-41c5-a7d7-a2cdc4fa7abd/v2.0
+          jwk-set-uri: https://login.microsoftonline.com/6109d4ab-3dff-41c5-a7d7-a2cdc4fa7abd/discovery/v2.0/keys
   cloud:
     gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
       server:
         webflux:
           routes:
-            - id: auth-service-v1
-              uri: http://auth:8080
-              predicates:
-                - Path=/api/v1/auth/**
-              filters:
-                - RewritePath=/api/v1(?<segment>/?.*), $\{segment}
-
             - id: bff-service
               uri: http://bff:8080
               predicates:
                 - Path=/api/v1/**
+              filters:
+                - name: RewritePath
+                  args:
+                    regexp: ^/api/v1/+(.*)
+                    replacement: /$1
 
           globalcors:
             cors-configurations:
@@ -41,3 +41,8 @@ spring:
                 allowedHeaders:
                   - "*"
                 allowCredentials: false
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web.server: DEBUG

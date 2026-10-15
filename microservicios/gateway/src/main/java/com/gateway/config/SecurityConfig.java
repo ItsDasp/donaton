@@ -4,7 +4,6 @@ import com.gateway.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -22,6 +21,9 @@ public class SecurityConfig {
 
     @Value("${AZURE_CLIENT_ID:test-client-id}")
     private String clientId;
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    private String issuerUri;
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http,
@@ -44,11 +46,8 @@ public class SecurityConfig {
             http.authorizeExchange(authz -> authz
                     .pathMatchers("/api/v1/auth/login", "/api/v1/auth/login/traditional", "/api/v1/auth/register", "/api/v1/auth/refresh", "/api/v1/auth/profile").permitAll()
                     .pathMatchers("/api/v1/auth/users", "/api/v1/auth/sessions").permitAll()
-                    .anyExchange().authenticated()
+                    .anyExchange().permitAll()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(Customizer.withDefaults())
-                    )
                 .addFilterAfter(jwtAuthenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION);
         } else {
             System.out.println("Using development authentication");
@@ -94,6 +93,8 @@ public class SecurityConfig {
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter();
     }
+
+
 
     private org.springframework.web.server.WebFilter devAuthFilter() {
         return (exchange, chain) -> {

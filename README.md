@@ -101,9 +101,6 @@ docker compose down
 │   ├── gateway/
 │   ├── logistics/
 │   └── needs/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
 └── docker-compose.yml
 ```
 
