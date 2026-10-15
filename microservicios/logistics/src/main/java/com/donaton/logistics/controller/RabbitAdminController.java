@@ -6,6 +6,7 @@ import com.donaton.logistics.service.RabbitAdminService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/v1/queues")
+@Profile("!test")
 public class RabbitAdminController {
 
     private final RabbitAdminService rabbitAdminService;

@@ -4,6 +4,7 @@ import com.donaton.logistics.dto.DlqReprocessResponse;
 import com.donaton.logistics.service.DlqReprocessorService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RestController
 @RequestMapping("/api/v1/logistics/admin/dlq")
+@Profile("!test")
 public class DlqAdminController {
 
     private final DlqReprocessorService dlqReprocessorService;
