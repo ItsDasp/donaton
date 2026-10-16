@@ -31,13 +31,16 @@ spring:
             cors-configurations:
               "[/**]":
                 allowedOrigins:
-                  - "*"
+                  - "https://donaton.xdasp.me"
+                  - "http://localhost:*"
+                  - "https://localhost:*"
                 allowedMethods:
                   - GET
                   - POST
                   - PUT
                   - DELETE
                   - PATCH
+                  - OPTIONS
                 allowedHeaders:
                   - "*"
-                allowCredentials: false
+                allowCredentials: true
